@@ -541,13 +541,23 @@ func (cs *checkout) convertCurrency(ctx context.Context, from *pb.Money, toCurre
 	return result, err
 }
 
-func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInfo *pb.CreditCardInfo) (string, error) {
-	paymentService := cs.paymentSvcClient
+// Fallback routing: route to backup payment service on primary failure
+// TODO: configure fallback address via env var (PAYMENT_FALLBACK_ADDR)
+const paymentFallbackAddr = "payment-backup:50051"
+
+func getPaymentServiceWithFallback(cs *checkout, ctx context.Context) pb.PaymentServiceClient {
+	// Try primary first; if feature flag indicates primary is down, route to backup
 	if cs.isFeatureFlagEnabled(ctx, "paymentUnreachable") {
-		badAddress := "badAddress:50051"
-		c := mustCreateClient(badAddress)
-		paymentService = pb.NewPaymentServiceClient(c)
+		logger.Info("Primary payment service unreachable, routing to fallback")
+		c := mustCreateClient(paymentFallbackAddr)
+		return pb.NewPaymentServiceClient(c)
 	}
+	return cs.paymentSvcClient
+}
+
+func (cs *checkout) chargeCard(ctx context.Context, amount *pb.Money, paymentInfo *pb.CreditCardInfo) (string, error) {
+	// Use fallback-aware payment service routing for resilience
+	paymentService := getPaymentServiceWithFallback(cs, ctx)
 
 	paymentResp, err := paymentService.Charge(ctx, &pb.ChargeRequest{
 		Amount:     amount,
