@@ -1,0 +1,448 @@
+# Alert rules for OpenTelemetry Demo failure injection scenarios.
+# These correspond to feature flags in demo.flagd.json.
+
+---
+apiVersion: 1
+groups:
+  - orgId: 1
+    name: DemoFailureInjection.1m
+    folder: OpenTelemetryDemo
+    interval: 1m
+    rules:
+      # Triggered by: paymentFailure flag
+      - uid: demo_payment_error_rate
+        title: PaymentServiceHighErrorRate
+        condition: error_threshold
+        data:
+          - refId: error_rate
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: webstore-metrics
+            model:
+              editorMode: code
+              expr: |-
+                (
+                  sum(rate(rpc_server_duration_milliseconds_count{service_name="paymentservice", rpc_grpc_status_code!="0"}[5m]))
+                  /
+                  sum(rate(rpc_server_duration_milliseconds_count{service_name="paymentservice"}[5m]))
+                ) > 0
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: error_rate
+          - refId: error_threshold
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.05
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: error_rate
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: error_threshold
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 1m
+        keepFiringFor: 2m
+        annotations:
+          description: >-
+            Payment service error rate is above 5%. Current value: {{ $value | humanizePercentage }}.
+            This typically indicates the paymentFailure feature flag has been enabled.
+          summary: High error rate on payment service
+        labels:
+          service_name: paymentservice
+          service_namespace: opentelemetry-demo
+          severity: critical
+          team_name: webstore
+        isPaused: false
+        notification_settings:
+          receiver: grafana-default-email
+
+      # Triggered by: cartFailure / failedReadinessProbe flags
+      - uid: demo_cart_unhealthy
+        title: CartServiceUnhealthy
+        condition: ready_threshold
+        data:
+          - refId: cart_ready
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: webstore-metrics
+            model:
+              editorMode: code
+              expr: |-
+                sum(rate(rpc_server_duration_milliseconds_count{service_name="cartservice", rpc_grpc_status_code!="0"}[5m]))
+                /
+                sum(rate(rpc_server_duration_milliseconds_count{service_name="cartservice"}[5m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: cart_ready
+          - refId: ready_threshold
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.05
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: cart_ready
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: ready_threshold
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 1m
+        keepFiringFor: 2m
+        annotations:
+          description: >-
+            Cart service is experiencing high error rates. Pods may be failing readiness probes.
+          summary: Cart service is unhealthy
+        labels:
+          service_name: cartservice
+          service_namespace: opentelemetry-demo
+          severity: critical
+          team_name: webstore
+        isPaused: false
+        notification_settings:
+          receiver: grafana-default-email
+
+      # Triggered by: imageSlowLoad flag
+      - uid: demo_frontend_latency
+        title: HighFrontendLatency
+        condition: latency_threshold
+        data:
+          - refId: p95_latency
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: webstore-metrics
+            model:
+              editorMode: code
+              expr: |-
+                histogram_quantile(
+                  0.95,
+                  sum by (le) (
+                    rate(http_server_request_duration_seconds_bucket{service_name="frontend"}[5m])
+                  )
+                )
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: p95_latency
+          - refId: latency_threshold
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 2
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: p95_latency
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: latency_threshold
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        keepFiringFor: 2m
+        annotations:
+          description: >-
+            Frontend P95 latency is above 2 seconds. Current value: {{ $value | humanizeDuration }}.
+            Check if imageSlowLoad flag is enabled.
+          summary: High P95 latency on frontend service
+        labels:
+          service_name: frontend
+          service_namespace: opentelemetry-demo
+          severity: warning
+          team_name: webstore
+        isPaused: false
+        notification_settings:
+          receiver: grafana-default-email
+
+      # Triggered by: kafkaQueueProblems flag
+      - uid: demo_kafka_lag
+        title: KafkaConsumerLag
+        condition: lag_threshold
+        data:
+          - refId: consumer_lag
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: webstore-metrics
+            model:
+              editorMode: code
+              expr: |-
+                sum(rate(rpc_server_duration_milliseconds_count{service_name="frauddetectionservice"}[5m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: consumer_lag
+          - refId: lag_threshold
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: consumer_lag
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: lag_threshold
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 3m
+        keepFiringFor: 5m
+        annotations:
+          description: >-
+            Kafka consumer lag is elevated. Fraud detection service may be falling behind.
+            Check kafkaQueueProblems feature flag.
+          summary: Kafka consumer lag detected
+        labels:
+          service_name: frauddetectionservice
+          service_namespace: opentelemetry-demo
+          severity: warning
+          team_name: webstore
+        isPaused: false
+        notification_settings:
+          receiver: grafana-default-email
+
+      # Triggered by: recommendationCacheFailure flag
+      - uid: demo_recommendation_memory
+        title: RecommendationMemoryGrowth
+        condition: memory_threshold
+        data:
+          - refId: memory_usage
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: webstore-metrics
+            model:
+              editorMode: code
+              expr: |-
+                sum(rate(rpc_server_duration_milliseconds_count{service_name="recommendationservice", rpc_grpc_status_code!="0"}[5m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: memory_usage
+          - refId: memory_threshold
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: memory_usage
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: memory_threshold
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        keepFiringFor: 5m
+        annotations:
+          description: >-
+            Recommendation service is showing degraded behavior, likely due to cache failures.
+            Check recommendationCacheFailure feature flag.
+          summary: Recommendation service degradation detected
+        labels:
+          service_name: recommendationservice
+          service_namespace: opentelemetry-demo
+          severity: warning
+          team_name: webstore
+        isPaused: false
+        notification_settings:
+          receiver: grafana-default-email
+
+      # Triggered by: adHighCpu flag
+      - uid: demo_ad_high_cpu
+        title: AdServiceHighCPU
+        condition: cpu_threshold
+        data:
+          - refId: cpu_usage
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: webstore-metrics
+            model:
+              editorMode: code
+              expr: |-
+                sum(rate(rpc_server_duration_milliseconds_count{service_name="adservice"}[5m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: cpu_usage
+          - refId: cpu_threshold
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: cpu_usage
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: cpu_threshold
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 2m
+        keepFiringFor: 2m
+        annotations:
+          description: >-
+            Ad service is experiencing high CPU usage. Check adHighCpu feature flag.
+          summary: High CPU usage on ad service
+        labels:
+          service_name: adservice
+          service_namespace: opentelemetry-demo
+          severity: warning
+          team_name: webstore
+        isPaused: false
+        notification_settings:
+          receiver: grafana-default-email
+
+      # Triggered by: paymentUnreachable flag
+      - uid: demo_checkout_failure
+        title: CheckoutFailureRate
+        condition: checkout_threshold
+        data:
+          - refId: checkout_errors
+            relativeTimeRange:
+              from: 600
+              to: 0
+            datasourceUid: webstore-metrics
+            model:
+              editorMode: code
+              expr: |-
+                sum(rate(rpc_server_duration_milliseconds_count{service_name="checkoutservice", rpc_grpc_status_code!="0"}[5m]))
+                /
+                sum(rate(rpc_server_duration_milliseconds_count{service_name="checkoutservice"}[5m]))
+              instant: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: checkout_errors
+          - refId: checkout_threshold
+            datasourceUid: __expr__
+            model:
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.05
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params:
+                      - C
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: checkout_errors
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: checkout_threshold
+              type: threshold
+        noDataState: NoData
+        execErrState: Error
+        for: 1m
+        keepFiringFor: 2m
+        annotations:
+          description: >-
+            Checkout service error rate is above 5%. Payment service may be unreachable.
+            Check paymentUnreachable feature flag.
+          summary: High failure rate on checkout service
+        labels:
+          service_name: checkoutservice
+          service_namespace: opentelemetry-demo
+          severity: critical
+          team_name: webstore
+        isPaused: false
+        notification_settings:
+          receiver: grafana-default-email
