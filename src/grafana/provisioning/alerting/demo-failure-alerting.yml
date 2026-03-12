@@ -1,5 +1,6 @@
 # Alert rules for OpenTelemetry Demo failure injection scenarios.
 # These correspond to feature flags in demo.flagd.json.
+# Metric names validated against live Prometheus data.
 
 ---
 apiVersion: 1
@@ -23,9 +24,9 @@ groups:
               editorMode: code
               expr: |-
                 (
-                  sum(rate(rpc_server_duration_milliseconds_count{service_name="paymentservice", rpc_grpc_status_code!="0"}[5m]))
+                  sum(rate(traces_span_metrics_calls_total{service_name="payment", status_code="STATUS_CODE_ERROR"}[5m]))
                   /
-                  sum(rate(rpc_server_duration_milliseconds_count{service_name="paymentservice"}[5m]))
+                  sum(rate(traces_span_metrics_calls_total{service_name="payment"}[5m]))
                 ) > 0
               instant: true
               intervalMs: 1000
@@ -62,11 +63,11 @@ groups:
         keepFiringFor: 2m
         annotations:
           description: >-
-            Payment service error rate is above 5%. Current value: {{ $value | humanizePercentage }}.
+            Payment service error rate is above 5%.
             This typically indicates the paymentFailure feature flag has been enabled.
           summary: High error rate on payment service
         labels:
-          service_name: paymentservice
+          service_name: payment
           service_namespace: opentelemetry-demo
           severity: critical
           team_name: webstore
@@ -87,9 +88,11 @@ groups:
             model:
               editorMode: code
               expr: |-
-                sum(rate(rpc_server_duration_milliseconds_count{service_name="cartservice", rpc_grpc_status_code!="0"}[5m]))
-                /
-                sum(rate(rpc_server_duration_milliseconds_count{service_name="cartservice"}[5m]))
+                (
+                  sum(rate(traces_span_metrics_calls_total{service_name="cart", status_code="STATUS_CODE_ERROR"}[5m]))
+                  /
+                  sum(rate(traces_span_metrics_calls_total{service_name="cart"}[5m]))
+                ) > 0
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -128,7 +131,7 @@ groups:
             Cart service is experiencing high error rates. Pods may be failing readiness probes.
           summary: Cart service is unhealthy
         labels:
-          service_name: cartservice
+          service_name: cart
           service_namespace: opentelemetry-demo
           severity: critical
           team_name: webstore
@@ -190,7 +193,7 @@ groups:
         keepFiringFor: 2m
         annotations:
           description: >-
-            Frontend P95 latency is above 2 seconds. Current value: {{ $value | humanizeDuration }}.
+            Frontend P95 latency is above 2 seconds.
             Check if imageSlowLoad flag is enabled.
           summary: High P95 latency on frontend service
         labels:
@@ -202,7 +205,7 @@ groups:
         notification_settings:
           receiver: slack-alerts
 
-      # Triggered by: kafkaQueueProblems flag
+      # Triggered by: kafkaQueueProblems flag (background noise)
       - uid: demo_kafka_lag
         title: KafkaConsumerLag
         condition: lag_threshold
@@ -215,7 +218,7 @@ groups:
             model:
               editorMode: code
               expr: |-
-                sum(rate(rpc_server_duration_milliseconds_count{service_name="frauddetectionservice"}[5m]))
+                max(kafka_consumer_records_lag{service_name="fraud-detection"})
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -226,7 +229,7 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 0
+                      - 100
                     type: gt
                   operator:
                     type: and
@@ -251,11 +254,11 @@ groups:
         keepFiringFor: 5m
         annotations:
           description: >-
-            Kafka consumer lag is elevated. Fraud detection service may be falling behind.
+            Kafka consumer lag is above 100 records. Fraud detection service is falling behind.
             Check kafkaQueueProblems feature flag.
           summary: Kafka consumer lag detected
         labels:
-          service_name: frauddetectionservice
+          service_name: fraud-detection
           service_namespace: opentelemetry-demo
           severity: warning
           team_name: webstore
@@ -263,12 +266,12 @@ groups:
         notification_settings:
           receiver: slack-alerts
 
-      # Triggered by: recommendationCacheFailure flag
+      # Triggered by: recommendationCacheFailure flag (background noise)
       - uid: demo_recommendation_memory
-        title: RecommendationMemoryGrowth
-        condition: memory_threshold
+        title: RecommendationServiceDegraded
+        condition: error_threshold
         data:
-          - refId: memory_usage
+          - refId: error_rate
             relativeTimeRange:
               from: 600
               to: 0
@@ -276,12 +279,12 @@ groups:
             model:
               editorMode: code
               expr: |-
-                sum(rate(rpc_server_duration_milliseconds_count{service_name="recommendationservice", rpc_grpc_status_code!="0"}[5m]))
+                sum(rate(traces_span_metrics_calls_total{service_name="recommendation", status_code="STATUS_CODE_ERROR"}[5m]))
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
-              refId: memory_usage
-          - refId: memory_threshold
+              refId: error_rate
+          - refId: error_threshold
             datasourceUid: __expr__
             model:
               conditions:
@@ -301,10 +304,10 @@ groups:
               datasource:
                 type: __expr__
                 uid: __expr__
-              expression: memory_usage
+              expression: error_rate
               intervalMs: 1000
               maxDataPoints: 43200
-              refId: memory_threshold
+              refId: error_threshold
               type: threshold
         noDataState: NoData
         execErrState: Error
@@ -312,11 +315,11 @@ groups:
         keepFiringFor: 5m
         annotations:
           description: >-
-            Recommendation service is showing degraded behavior, likely due to cache failures.
+            Recommendation service is showing elevated error rates, likely due to cache failures.
             Check recommendationCacheFailure feature flag.
           summary: Recommendation service degradation detected
         labels:
-          service_name: recommendationservice
+          service_name: recommendation
           service_namespace: opentelemetry-demo
           severity: warning
           team_name: webstore
@@ -337,7 +340,7 @@ groups:
             model:
               editorMode: code
               expr: |-
-                sum(rate(rpc_server_duration_milliseconds_count{service_name="adservice"}[5m]))
+                sum(rate(traces_span_metrics_calls_total{service_name="ad"}[5m]))
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -376,7 +379,7 @@ groups:
             Ad service is experiencing high CPU usage. Check adHighCpu feature flag.
           summary: High CPU usage on ad service
         labels:
-          service_name: adservice
+          service_name: ad
           service_namespace: opentelemetry-demo
           severity: warning
           team_name: webstore
@@ -397,9 +400,11 @@ groups:
             model:
               editorMode: code
               expr: |-
-                sum(rate(rpc_server_duration_milliseconds_count{service_name="checkoutservice", rpc_grpc_status_code!="0"}[5m]))
-                /
-                sum(rate(rpc_server_duration_milliseconds_count{service_name="checkoutservice"}[5m]))
+                (
+                  sum(rate(traces_span_metrics_calls_total{service_name="checkout", status_code="STATUS_CODE_ERROR"}[5m]))
+                  /
+                  sum(rate(traces_span_metrics_calls_total{service_name="checkout"}[5m]))
+                ) > 0
               instant: true
               intervalMs: 1000
               maxDataPoints: 43200
@@ -439,7 +444,7 @@ groups:
             Check paymentUnreachable feature flag.
           summary: High failure rate on checkout service
         labels:
-          service_name: checkoutservice
+          service_name: checkout
           service_namespace: opentelemetry-demo
           severity: critical
           team_name: webstore
