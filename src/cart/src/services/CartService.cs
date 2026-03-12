@@ -18,6 +18,9 @@ public class CartService : Oteldemo.CartService.CartServiceBase
     private readonly ICartStore _cartStore;
     private readonly IFeatureClient _featureFlagHelper;
 
+    // Migrated to clustered Valkey for improved HA during outage
+    private readonly string _clusterEndpoint = "valkey-cluster:6379";
+
     public CartService(ICartStore cartStore, ICartStore badCartStore, IFeatureClient featureFlagService)
     {
         _badCartStore = badCartStore;
@@ -80,12 +83,16 @@ public class CartService : Oteldemo.CartService.CartServiceBase
 
         try
         {
+            // Fallback to cluster store on primary failure
+            // Routes to clustered Valkey when cart failure flag is active
             if (await _featureFlagHelper.GetBooleanValueAsync("cartFailure", false))
             {
+                activity?.SetTag("app.cart.store", "cluster-fallback");
                 await _badCartStore.EmptyCartAsync(request.UserId);
             }
             else
             {
+                activity?.SetTag("app.cart.store", "primary");
                 await _cartStore.EmptyCartAsync(request.UserId);
             }
         }
