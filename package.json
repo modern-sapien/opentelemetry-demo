@@ -1,6 +1,10 @@
 {
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@umbrelladocs/linkspector": "^0.4.8",
-    "markdownlint-cli": "^0.48.0"
+    "checkly": "^7.5.5",
+    "markdownlint-cli": "^0.48.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
   }
 }
