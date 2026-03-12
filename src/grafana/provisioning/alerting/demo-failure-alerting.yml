@@ -72,7 +72,7 @@ groups:
           team_name: webstore
         isPaused: false
         notification_settings:
-          receiver: grafana-default-email
+          receiver: slack-alerts
 
       # Triggered by: cartFailure / failedReadinessProbe flags
       - uid: demo_cart_unhealthy
@@ -134,7 +134,7 @@ groups:
           team_name: webstore
         isPaused: false
         notification_settings:
-          receiver: grafana-default-email
+          receiver: slack-alerts
 
       # Triggered by: imageSlowLoad flag
       - uid: demo_frontend_latency
@@ -200,7 +200,7 @@ groups:
           team_name: webstore
         isPaused: false
         notification_settings:
-          receiver: grafana-default-email
+          receiver: slack-alerts
 
       # Triggered by: kafkaQueueProblems flag
       - uid: demo_kafka_lag
@@ -261,7 +261,7 @@ groups:
           team_name: webstore
         isPaused: false
         notification_settings:
-          receiver: grafana-default-email
+          receiver: slack-alerts
 
       # Triggered by: recommendationCacheFailure flag
       - uid: demo_recommendation_memory
@@ -322,7 +322,7 @@ groups:
           team_name: webstore
         isPaused: false
         notification_settings:
-          receiver: grafana-default-email
+          receiver: slack-alerts
 
       # Triggered by: adHighCpu flag
       - uid: demo_ad_high_cpu
@@ -382,7 +382,7 @@ groups:
           team_name: webstore
         isPaused: false
         notification_settings:
-          receiver: grafana-default-email
+          receiver: slack-alerts
 
       # Triggered by: paymentUnreachable flag
       - uid: demo_checkout_failure
@@ -445,4 +445,4 @@ groups:
           team_name: webstore
         isPaused: false
         notification_settings:
-          receiver: grafana-default-email
+          receiver: slack-alerts

@@ -1,0 +1,38 @@
+# Grafana contact points provisioning
+# Adds a Slack contact point for alert notifications.
+#
+# To configure:
+# 1. Create a Slack Incoming Webhook: https://api.slack.com/messaging/webhooks
+# 2. Replace SLACK_WEBHOOK_URL below with your actual webhook URL
+# 3. Optionally set the channel and mention users/groups
+
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: slack-alerts
+    receivers:
+      - uid: slack-alerts-1
+        type: slack
+        settings:
+          url: "${SLACK_WEBHOOK_URL}"
+          title: |
+            {{ if eq .Status "firing" }}🔴{{ else }}🟢{{ end }} {{ .CommonLabels.alertname }}
+          text: |
+            **Status**: {{ .Status | toUpper }}
+            **Severity**: {{ .CommonLabels.severity }}
+            **Service**: {{ .CommonLabels.service_name }}
+            {{ if .CommonAnnotations.summary }}**Summary**: {{ .CommonAnnotations.summary }}{{ end }}
+            {{ if .CommonAnnotations.description }}**Details**: {{ .CommonAnnotations.description }}{{ end }}
+          mentionChannel: "here"
+        disableResolveMessage: false
+
+policies:
+  - orgId: 1
+    receiver: slack-alerts
+    group_by:
+      - alertname
+      - service_name
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 1h
