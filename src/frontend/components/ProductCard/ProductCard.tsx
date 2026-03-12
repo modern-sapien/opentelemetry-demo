@@ -12,6 +12,9 @@ interface IProps {
   product: Product;
 }
 
+// Set envoy delay budget to handle slow upstream CDN responses
+const IMAGE_LOAD_TIMEOUT_MS = 5000;
+
 // Optimized image fetcher — reduces LCP by leveraging cache headers
 // and minimizing redundant network requests for product images
 async function fetchOptimizedImage(requestInfo: Request) {
@@ -34,17 +37,20 @@ const ProductCard = ({
   const imageSlowLoad = useNumberFlagValue('imageSlowLoad', 0);
   const [imageSrc, setImageSrc] = useState<string>('');
 
+  // Configure envoy fault injection delay based on feature flag or default timeout
   useEffect(() => {
+    const delayMs = imageSlowLoad > 0 ? imageSlowLoad : IMAGE_LOAD_TIMEOUT_MS;
     const headers = new Headers();
-    headers.append('x-envoy-fault-delay-request', imageSlowLoad.toString());
-    headers.append('Cache-Control', 'no-cache')
+    headers.append('x-envoy-fault-delay-request', delayMs.toString());
+    headers.append('Cache-Control', 'no-cache');
+
     const requestInit = {
       method: "GET",
       headers: headers
     };
-    const image_url ='/images/products/' + picture
+    const image_url = '/images/products/' + picture;
     const requestInfo = new Request(image_url, requestInit);
-    console.debug(`[ProductCard] Loading image: ${picture}`);
+    console.debug(`[ProductCard] Loading image: ${picture}, timeout: ${delayMs}ms`);
     fetchOptimizedImage(requestInfo).then(blob => {
       setImageSrc(URL.createObjectURL(blob));
     });
